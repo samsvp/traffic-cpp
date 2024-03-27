@@ -6,11 +6,12 @@
 #include "vehicle.hpp"
 
 
+#define R_OFFSET 5.0f
+
 const float SCALE = 4.0f;
 const int WINDOW_WIDTH = 1000;
 const int WINDOW_HEIGHT = 600;
-const float ROAD_LENGTH = WINDOW_WIDTH / SCALE;
-const float R = ROAD_LENGTH / (2 * PI); // from the perimeter: p = 2 * pi * r
+const float R = 70.0f;
 
 double previous_time = GetTime();
 double current_time = 0.0;
@@ -23,6 +24,12 @@ struct CirclePos
     Vec2 pos;
     float angle;
 };
+
+
+float get_road_length(int lane)
+{
+    return 2 * PI * (R - lane * R_OFFSET);
+}
 
 // draws the vehicle inside the circle with the right angle
 void draw_vehicle(CirclePos circle_position, int i)
@@ -40,15 +47,16 @@ void draw_vehicle(CirclePos circle_position, int i)
 
 
 // converts the position to a circular position
-CirclePos pos_to_circle(Vec2 pos)
+CirclePos pos_to_circle(Vec2 pos, int lane)
 {
     float x_offset =  WINDOW_WIDTH / (SCALE * 2.0f);
     float y_offset =  WINDOW_HEIGHT / (SCALE * 2.0f);
-    float angle = pos.x / R;
+    float radius = R - R_OFFSET * lane;
+    float angle = pos.x / radius;
     return {
         Vec2{
-            R * cosf(angle) + x_offset,
-            R * sinf(angle) + y_offset
+            radius * cosf(angle) + x_offset,
+            radius * sinf(angle) + y_offset
         },
         angle
     };
@@ -94,8 +102,10 @@ void input_desired_velocity(Vehicle& v)
 int main(void)
 {
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "raylib [core] example - basic window");
-    int N = 18;
-    std::vector<Vehicle> vehicles = spawn_cars(N, ROAD_LENGTH);
+    int n_lanes = 2;
+    int n_cars = 18;
+    int N = n_lanes * n_cars;
+    std::vector<Vehicle> vehicles = spawn_cars(n_cars, {get_road_length(0), get_road_length(1)}, n_lanes);
 
     std::vector<CirclePos> circular_positions(N);
     printf("\nInitial positions:\n");
@@ -104,21 +114,24 @@ int main(void)
     }
     for (int i=0; i<N; i++)
     {
-        circular_positions[i] = pos_to_circle(vehicles[i].position);
+        circular_positions[i] = pos_to_circle(vehicles[i].position, vehicles[i].lane);
     }
 
+    find_leader(vehicles[35], vehicles);
+    find_follower(vehicles[0], vehicles);
     while (!WindowShouldClose())
     {
         // movement
         for (int i=0; i<N; i++)
         {
-            vehicle::move_vehicle(i, vehicles, dt, ROAD_LENGTH);
             Vehicle* v = &vehicles[i];
+            float road_length = get_road_length(v->lane);
+            vehicle::move_vehicle(i, vehicles, dt, road_length);
             // loop through the road, as its a circle
-            if (v->position.x > ROAD_LENGTH) {
+            if (v->position.x > road_length) {
                 v->position.x = 0;
             }
-            circular_positions[i] = pos_to_circle(vehicles[i].position);
+            circular_positions[i] = pos_to_circle(vehicles[i].position, vehicles[i].lane);
         }
         BeginDrawing();
         {
