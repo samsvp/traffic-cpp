@@ -5,6 +5,7 @@
 #include <raylib.h>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #include "vehicle.hpp"
 #include "detector.hpp"
@@ -15,8 +16,8 @@ using json = nlohmann::json;
 
 
 #define R_OFFSET 5.0f
-#define LANE_CHANGE_TIMEOUT 5.0f
-#define MAX_JSON_LENGTH 100
+#define LANE_CHANGE_TIMEOUT 2.5f
+#define MAX_JSON_LENGTH 1000
 
 
 const float SCALE = 4.0f;
@@ -43,9 +44,14 @@ float get_road_length(int lane)
 }
 
 // draws the vehicle inside the circle with the right angle
-void draw_vehicle(CirclePos circle_position, int i)
+void draw_vehicle(CirclePos circle_position, int i, vehicle::Vehicle v)
 {
-    Color color = i == 0 ? (Color){255, 0, 0, 255} : (Color){ 0, 0, 255, 255 };
+    Color color;
+    if (i == 0) {
+        color = {255, 0, 0, 255};
+    } else {
+        color = v.type == CAR ? (Color){0, 255, 0, 255} : (Color){ 0, 0, 255, 255 };
+    }
     Rectangle rect = {
         SCALE * circle_position.pos.x,
         SCALE * circle_position.pos.y,
@@ -124,10 +130,6 @@ int main(void)
     std::vector<Vehicle> vehicles = spawn_cars(n_cars, road_lengths, n_lanes);
 
     std::vector<CirclePos> circular_positions(N);
-    printf("\nInitial positions:\n");
-    for (Vehicle v: vehicles) {
-        printf("Pos X: %f, velocity: %f, acc: %f\n", v.position.x, v.velocity, v.acceleration);
-    }
     for (int i=0; i<N; i++) {
         circular_positions[i] = pos_to_circle(vehicles[i].position, vehicles[i].lane);
     }
@@ -160,7 +162,7 @@ int main(void)
             ClearBackground(RAYWHITE);
             for (int i=0; i<N; i++)
             {
-                draw_vehicle(circular_positions[i], i);
+                draw_vehicle(circular_positions[i], i, vehicles[i]);
             }
             draw_info(vehicles);
             input_desired_velocity(vehicles[vehicles.size()-1]);
@@ -189,9 +191,12 @@ int main(void)
         }
         // vehicles json
         json_dt += dt;
-        vehicles[0].lane_change_timeout -= dt;
-        if (vehicles[0].lane_change_timeout < 0) {
-            vehicles[0].lane_change_timeout = 0;
+        for (int i = 0; i < vehicles.size(); i++)
+        {
+            vehicles[i].lane_change_timeout -= dt;
+            if (vehicles[i].lane_change_timeout < 0) {
+                vehicles[i].lane_change_timeout = 0;
+            }
         }
 
         // save data to json
@@ -202,10 +207,17 @@ int main(void)
             for (int i = 0; i < vehicles.size(); i++) {
                 Vehicle v = vehicles[i];
                 j[key].push_back({ {"id", i }, {"u", v.position.x}, {"lane", v.lane}, {"speed", v.velocity } });
+
             }
             if (iters == MAX_JSON_LENGTH) {
                 printf("JSON completed\n");
                 std::string detector_json = d.to_json().dump();
+                std::ofstream out("detector.json");
+                out << detector_json;
+                out.close();
+                std::ofstream out_veh("veh_data.json");
+                out_veh << j.dump();
+                out_veh.close();
             }
             json_dt = 0;
         }
