@@ -16,6 +16,10 @@ class Detector
 {
 
     public:
+        float u;
+        std::vector<float> velocities;
+        std::vector<float> flows;
+        std::vector<float> densities;
         Detector(float u, float period, std::vector<Vehicle> vs) : u(u), period(period)
         {
             update_vehicle_pos(vs);
@@ -72,16 +76,12 @@ class Detector
 
 
     private:
-        float u;
         float velocity_sum = 0;
         float vehicle_count = 0;
         // when passed_dt > period calculate tse
         float passed_dt = 0;
         float period;
         std::map<int, float> last_vehicles_positions;
-        std::vector<float> velocities;
-        std::vector<float> flows;
-        std::vector<float> densities;
 
         void update_vehicle_pos(std::vector<Vehicle> vs)
         {
