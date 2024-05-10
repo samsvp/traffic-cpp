@@ -30,13 +30,13 @@ class Detector
         {
             // get vehicles velocity which just passed through u
             std::vector<float> velocities;
+            float offset = 1.5f;
             for (int i = 0; i < vs.size(); i++)
             {
                 auto v = vs[i];
-                if (v.position.x < u || last_vehicles_positions[i] > u) {
-                    continue;
+                if (v.position.x < u + offset && v.position.x > u - offset) {
+                    velocities.push_back(v.velocity);
                 }
-                velocities.push_back(v.velocity);
             }
             float velocity_acc = std::accumulate(velocities.begin(), velocities.end(), 0.0f);
             velocity_sum += velocity_acc;
