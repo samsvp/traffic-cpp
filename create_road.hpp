@@ -37,11 +37,10 @@ RoadLine create_line(Vector2 mouse_pos)
 }
 
 
-RoadLine append_to_line(Vector2 mouse_pos, RoadLine& line)
+void append_to_line(Vector2 mouse_pos, RoadLine* line)
 {
     auto point = Point{.x=(int)mouse_pos.x, .y=(int)mouse_pos.y, .is_hovering=false};
-    line.points.push_back(point);
-    return line;
+    line->points.push_back(point);
 }
 
 
@@ -71,6 +70,20 @@ void draw(const std::vector<Square>& grid, const std::vector<RoadLine> lines, Mo
         if (square.is_hovering) {
             DrawRectangle(square.x, square.y, square.size, square.size, BLUE);
         }
+    }
+
+    for (auto line: lines)
+    {
+        for (auto point: line.points)
+        {
+            DrawCircle(point.x, point.y, 5, MAGENTA);
+        }
+        std::vector<Vector2> points(line.points.size());
+        for (int i = 0; i < points.size(); i++)
+        {
+            points[i] = Vector2{.x=(float)line.points[i].x, .y=(float)line.points[i].y};
+        }
+        DrawLineStrip(&points[0], line.points.size(), MAGENTA);
     }
 
     DrawText(mode_string.c_str(), 20, 20, 20, RED);

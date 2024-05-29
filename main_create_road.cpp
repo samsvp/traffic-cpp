@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <raylib.h>
 #include <vector>
 
@@ -50,11 +51,12 @@ int main()
                     if (current_line == NULL) {
                         RoadLine line = create_line(GetMousePosition());
                         lines.push_back(line);
-                        current_line = &line;
+                        current_line = &lines[lines.size()-1];
                     }
                 } else if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
                     if (current_line != NULL) {
-                        append_to_line(GetMousePosition(), *current_line);
+                        append_to_line(GetMousePosition(), current_line);
+                        current_line = NULL;
                     }
                 }
                 break;
