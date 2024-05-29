@@ -94,7 +94,7 @@ std::vector<Vehicle> spawn_cars(int N, std::vector<float> road_lengths, int n_la
             float v_d = v_type == CAR ? v_d_car : v_d_truck;
             Vec2 pos = { .x = (0.01f * randf() + 0.99f) * i * x_step, .y = 20 };
             vehicles[(i-1) + l * N].position = pos;
-            vehicles[(i-1) + l * N].acceleration = 0.1f * randf() + 1.9f;
+            vehicles[(i-1) + l * N].acceleration = 0.1f * randf();
             vehicles[(i-1) + l * N].velocity = v_d * (0.1f * randf() + 0.95f);
             vehicles[(i-1) + l * N].v_d = v_d;
             vehicles[(i-1) + l * N].lane = l;

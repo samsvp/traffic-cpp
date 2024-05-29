@@ -10,7 +10,7 @@
 #include <vector>
 
 using namespace vehicle;
-using json = nlohmann::json;
+using ordered_json = nlohmann::ordered_json;
 
 class Detector
 {
@@ -63,9 +63,9 @@ class Detector
         }
 
 
-        json to_json() const
+        ordered_json to_json() const
         {
-            json j;
+            ordered_json j;
             for (int i=0; i < velocities.size(); i++)
             {
                 std::string key = std::to_string(i);

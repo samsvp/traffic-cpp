@@ -22,7 +22,7 @@ public:
         for (int i = 0; i < vs.size(); i++)
         {
             auto& v = vs[i];
-            if (v.position.x < u + offset && v.position.x > u - offset) {
+            if (v.position.x < u && v.position.x > u - offset) {
                 v.v_d = v_d;
             }
         }

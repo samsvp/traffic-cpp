@@ -15,20 +15,22 @@
 #include "nlohmann/json.hpp"
 #include "argparse/argparse.hpp"
 
-using json = nlohmann::json;
+using ordered_json = nlohmann::ordered_json;
 
 
 #define R_OFFSET 5.0f
 #define LANE_CHANGE_TIMEOUT 2.5f
-#define MAX_JSON_LENGTH 50
+#define MAX_JSON_LENGTH 1500
 
 
 struct Args : public argparse::Args {
-    std::string &filepath = kwarg("f,filepath", "Output json file");
-    std::string &det_prefix = kwarg("d, det-prefix", "Prefix to detectors file");
+    std::string &filepath = kwarg("f,filepath", "Output json file").set_default("out.json");
+    std::string &det_prefix = kwarg("d, det-prefix", "Prefix to detectors file").set_default("out");
     int &n_lanes = kwarg("n,n-lanes", "The number of lanes to simulate").set_default(3);
     int &n_cars = kwarg("c,n-cars", "The number of cars per lane").set_default(20);
     bool &no_control = flag("no-control", "don't use speed control");
+    bool &save = flag("s,save", "Save data");
+    bool &jam = flag("j,jam", "Create traffic jam");
 };
 
 
@@ -172,6 +174,7 @@ int main(int argc, char* argv[])
 
     auto args = argparse::parse<Args>(argc, argv);
 
+    bool should_save = args.save;
     int n_lanes = args.n_lanes;
     int n_cars = args.n_cars;
     int N = n_lanes * n_cars;
@@ -186,20 +189,24 @@ int main(int argc, char* argv[])
         circular_positions[i] = pos_to_circle(vehicles[i].position, vehicles[i].lane);
     }
 
-    json j;
+    ordered_json j;
     // only save when json_dt > json_period
     float json_dt = 0;
-    float json_period = 1.5f;
+    float json_period = 0.05f;
     int iters = 0;
-    Detector d1(0, json_period, vehicles);
-    Detector d2(0.3f * road_lengths[0], json_period, vehicles);
-    Detector d3(0.6f * road_lengths[0], json_period, vehicles);
+    Detector d1(0, json_period * 30, vehicles);
+    Detector d2(0.3f * road_lengths[0], json_period * 30, vehicles);
+    Detector d3(0.6f * road_lengths[0], json_period * 30, vehicles);
     std::vector<Detector> ds = {d1, d2, d3};
 
+    float dissipation_time = 1.1f * n_cars;
+    float jam_size = (n_cars) * (CAR_LENGTH + delta_s_min);
+    float speed_limit = (road_lengths[0] - jam_size) / dissipation_time;
+    int speed_limit_iters = 1.1f * dissipation_time / json_period;
     SpeedLimit sp1(0.25f * road_lengths[0], 1, vehicles);
-    SpeedLimit sp2(0.5f * road_lengths[0], 20 / 3.6, vehicles);
-    SpeedLimit sp3(0.5f * road_lengths[0], 35 / 3.6, vehicles);
-    SpeedLimit sp4(0.5f * road_lengths[0], 50 / 3.6, vehicles);
+    SpeedLimit sp2(0.5f * road_lengths[0], speed_limit, vehicles);
+    SpeedLimit sp3(0.5f * road_lengths[0], 40 / 3.6, vehicles);
+    printf("Speed limit = %f\tSpeed limit iters = %d\n", speed_limit * 3.6, speed_limit_iters);
     while (!WindowShouldClose())
     {
         // movement
@@ -231,23 +238,45 @@ int main(int argc, char* argv[])
             );
         }
 
-        if (iters < 15) {
-            sp1.apply(vehicles);
-        } else if (iters == 15) {
-            sp1.remove_speed_limit(vehicles);
-            if (!args.no_control) {
-                sp2.apply_all(vehicles);
+        if (args.jam)
+        {
+            if (iters < 15) {
+                sp1.apply(vehicles);
+            } else if (iters == 450) {
+                sp1.remove_speed_limit(vehicles);
+                if (!args.no_control) {
+                    sp2.apply_all(vehicles);
+                }
+                // remove limit after ~26 s
+            } else if (!args.no_control && iters == 450 + speed_limit_iters) {
+                sp2.remove_speed_limit(vehicles);
+                sp3.apply_all(vehicles);
+            } else if (!args.no_control && iters == 1200) {
+                sp3.remove_speed_limit(vehicles);
             }
-        } else if (!args.no_control && iters == 20) {
-            sp2.remove_speed_limit(vehicles);
-            sp3.apply_all(vehicles);
-        } else if (!args.no_control && iters == 30) {
-            sp3.remove_speed_limit(vehicles);
-            sp4.apply_all(vehicles);
-        } else if (!args.no_control && iters == 40) {
-            sp4.remove_speed_limit(vehicles);
+            /**
+            if (iters > 15 && iters < 60 && !args.no_control) {
+                for (int i=0; i < vehicles.size(); i++)
+                {
+                    auto& v = vehicles[i];
+                    if (i == 6) {
+                        continue;
+                    }
+                    Vehicle leader = find_leader(v, vehicles);
+                    if (leader.position.x - v.position.x > delta_s_min) {
+                        v.v_d += 1;
+                    } else {
+                        v.v_d = 120 / 3.6;
+                    }
+                }
+            } else if (iters > 60) {
+                for (int i=0; i < vehicles.size(); i++)
+                {
+                    auto& v = vehicles[i];
+                    v.v_d = v.type == CAR ? v_d_car : v_d_truck;
+                }
+            }*/
         }
-
 
         BeginDrawing();
         {
@@ -280,14 +309,18 @@ int main(int argc, char* argv[])
         }
 
         // save data to json
-        if (json_dt > json_period) {
+        if (should_save && json_dt > json_period) {
             iters++;
-            printf("iter %d\n", iters);
             std::string key = std::to_string(iters);
-            j[key] = json::array();
+            j[key] = ordered_json::array();
             for (int i = 0; i < vehicles.size(); i++) {
                 Vehicle v = vehicles[i];
-                j[key].push_back({ {"id", i }, {"u", v.position.x}, {"lane", v.lane}, {"speed", v.velocity } });
+                j[key].push_back({
+                    {"id", i },
+                    // pretend all lanes are the same size
+                    {"u", v.position.x / road_lengths[v.lane] * road_lengths[0]},
+                    {"lane", v.lane},
+                    {"speed", v.velocity } });
             }
             if (iters == MAX_JSON_LENGTH) {
                 printf("JSON completed\n");
